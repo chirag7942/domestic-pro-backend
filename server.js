@@ -10,6 +10,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get("/", (req, res) => {
+  res.send("Hello World");
+});
+
 /*
   FUNCTION: Automatically generate new access token
 */
@@ -140,6 +144,139 @@ app.post("/submit", async (req, res) => {
 
     res.status(200).json({
       message: "Submitted successfully",
+      data: response.data,
+    });
+  } catch (error) {
+    console.error("Zoho Error:", error.response?.data || error.message);
+
+    res.status(500).json({
+      message: "Zoho API failed",
+      error: error.response?.data || error.message,
+    });
+  }
+});
+
+/* ============================================================
+   JOTFORM ROUTE — DomesticPro Supplier Onboarding Form
+   JotForm Webhook URL: https://yourdomain.com/submit-jotform
+   Form: https://form.jotform.com/253542636960058
+   ============================================================
+
+   JotForm field key format: q{number}_{camelCaseName}
+   Log raw body first to confirm exact keys from your form.
+
+   FIELDS FROM YOUR FORM:
+   ┌─────────────────────────────────────────────────────────┐
+   │ Page 1                                                  │
+   │  • Name (First + Last)                                  │
+   │  • Phone Number                                         │
+   │  • Gender                                               │
+   │  • Age                                                  │
+   │  • Marital Status                                       │
+   │  • Current City                                         │
+   │  • Native City                                          │
+   │  • Language Spoken                                      │
+   │  • Service Applying For                                 │
+   │  • Salary Expectation                                   │
+   │  • Years of Experience                                  │
+   │  • Age Groups Handled   (Nanny-specific)                │
+   │  • Cuisine Expertise    (Cook-specific)                 │
+   │  • Category (Veg/Non-Veg) (Cook-specific)               │
+   │  • Vehicle Experience   (Driver-specific)               │
+   │  • Driving License      (Driver-specific)               │
+   │  • Work Comfortable With (House Help-specific)          │
+   │  • Aadhaar Card (file upload)                           │
+   │  • Photograph (file upload)                             │
+   │                                                         │
+   │ Page 2 — Interview Assessment                           │
+   │  • Understands Instructions                             │
+   │  • Overall Attitude                                     │
+   │  • Punctuality & Responsiveness                         │
+   │  • Personal Hygiene & Neatness                          │
+   │                                                         │
+   │ Page 3                                                  │
+   │  • Domestic Pro Verified                                │
+   └─────────────────────────────────────────────────────────┘
+*/
+app.post("/submit-jotform", async (req, res) => {
+  try {
+    const body = req.body;
+
+    // ── RAW LOG — Check this on first test to confirm field keys ──────────
+    console.log("JotForm RAW body:", JSON.stringify(body, null, 2));
+
+    const accessToken = await getAccessToken();
+
+    const zohoData = {
+      // ── Section 1: Personal Info ─────────────────────────────────────────
+      // JotForm sends Name as: { first: "John", last: "Doe" }
+      Full_Name:
+        `${body.q3_name?.first || ""} ${body.q3_name?.last || ""}`.trim(),
+      Phone_Number: body.q4_phoneNumber || "",
+      Gender: body.q5_gender || "",
+      Age: body.q6_age || "",
+      Marital_Status: body.q7_maritalStatus || "", // "Yes" or "No"
+
+      // ── Section 2: Location ──────────────────────────────────────────────
+      Current_City: body.q8_currentCity || "",
+      Native_City: body.q9_nativeCity || "",
+
+      // ── Section 3: Skills & Service ─────────────────────────────────────
+      Language_Spoken: body.q10_languageSpoken || "",
+      Service_Applying: body.q11_whichService || "", // e.g. "Nanny", "Cook", "Driver" etc.
+      Salary_Expectation: body.q12_salaryExpectation || "",
+      Years_Of_Experience: body.q13_yearsOf || "",
+
+      // ── Section 4: Role-Specific Fields ─────────────────────────────────
+
+      // Nanny — Age Groups Handled (checkbox → comma-separated)
+      Age_Groups_Handled: arrToStr(body.q14_ageGroups),
+
+      // Cook — Cuisine & Category
+      Cuisine_Expertise: body.q15_cuisineExpertise || "", // single select
+      Food_Category: body.q16_category || "", // Veg / Non-Veg / Both
+
+      // Driver — Vehicle & License
+      Vehicle_Experience: arrToStr(body.q17_typeOf), // checkbox
+      Driving_License: body.q18_drivingLicense || "", // "Yes" or "No"
+
+      // House Help — Work Type
+      Work_Comfortable_With: arrToStr(body.q19_typeOf1), // checkbox
+
+      // ── Section 5: Document Uploads ──────────────────────────────────────
+      // JotForm sends file uploads as a URL string
+      Aadhaar_Card: body.q20_aadhaarCard || "",
+      Photograph: body.q21_phot0ograph || "", // note: typo in form kept as-is
+
+      // ── Section 6: Interview Assessment (Page 2) ─────────────────────────
+      Understands_Instructions: body.q22_understandsInstructions || "", // Poor/Average/Good
+      Overall_Attitude: body.q23_overallAttitude || "", // Uncooperative/Neutral/Cooperative
+      Punctuality: body.q24_punctualityResponsiveness || "", // Poor/Average/Good
+      Personal_Hygiene: body.q25_personalHygiene || "", // Poor/Acceptable/Good
+
+      // ── Section 7: Verification (Page 3) ────────────────────────────────
+      Domestic_Pro_Verified: body.q26_domesticPro || "", // "Yes" or "No"
+    };
+
+    console.log("Sending to Zoho:", JSON.stringify(zohoData, null, 2));
+
+    // ⚠️ IMPORTANT: Change the form name below to your Zoho Creator
+    //    supplier form name (e.g. SupplierOnboarding) if it's different
+    const response = await axios.post(
+      "https://creator.zoho.in/appbuilder/support_domesticpro/helpermatch-system/form/Helpers1",
+      { data: zohoData },
+      {
+        headers: {
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    console.log("Zoho Response:", JSON.stringify(response.data, null, 2));
+
+    res.status(200).json({
+      message: "JotForm supplier submitted successfully",
       data: response.data,
     });
   } catch (error) {
