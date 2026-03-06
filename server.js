@@ -194,10 +194,11 @@ app.post("/submit-jotform", async (req, res) => {
 
       // DOCUMENT UPLOADS
       Aadhaar_Card: Array.isArray(raw.fileUpload)
-        ? raw.fileUpload[0] || ""
+        ? raw.fileUpload.join(", ")
         : raw.fileUpload || "",
+
       Photograph: Array.isArray(raw.fileUpload25)
-        ? raw.fileUpload25[0] || ""
+        ? raw.fileUpload25.join(", ")
         : raw.fileUpload25 || "",
 
       // METADATA
