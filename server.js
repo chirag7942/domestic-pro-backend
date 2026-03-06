@@ -210,7 +210,7 @@ app.post("/submit-jotform", async (req, res) => {
     console.log("Sending to Zoho (Supply):", JSON.stringify(zohoData, null, 2));
 
     const response = await axios.post(
-      "https://creator.zoho.in/api/v2/support_domesticpro/helpermatch-system/form/Helpers1",
+      "https://creator.zoho.in/appbuilder/support_domesticpro/helpermatch-system/form/Helpers1",
       { data: zohoData },
       {
         headers: {
