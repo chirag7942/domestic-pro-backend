@@ -121,8 +121,8 @@ app.post("/submit", async (req, res) => {
 
 app.post("/submit-jotform", upload.any(), async (req, res) => {
   try {
-    console.log("Headers:", req.headers);
     console.log("Body:", req.body);
+    console.log("Files:", req.files);
     const body = req.body;
 
     console.log("Webhook body:", JSON.stringify(body, null, 2));
