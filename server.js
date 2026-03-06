@@ -14,6 +14,9 @@ app.get("/", (req, res) => {
   res.send("Hello World");
 });
 
+/*
+  FUNCTION: Automatically generate new access token
+*/
 async function getAccessToken() {
   try {
     const response = await axios.post(
@@ -28,6 +31,7 @@ async function getAccessToken() {
         },
       },
     );
+
     return response.data.access_token;
   } catch (error) {
     console.error(
@@ -38,53 +42,93 @@ async function getAccessToken() {
   }
 }
 
+/*
+  HELPER: Convert array to comma-separated string
+  Empty arrays become "" — Zoho stores them as blank, no error
+*/
 function arrToStr(val) {
   if (Array.isArray(val)) return val.filter(Boolean).join(", ");
   return val || "";
 }
 
+/*
+  SUBMIT ROUTE — Sends all 33 fields to Zoho Creator
+  Unfilled fields are sent as "" and stored blank in Zoho
+*/
 app.post("/submit", async (req, res) => {
   try {
     const body = req.body;
-    console.log("Demand form submission:", JSON.stringify(body, null, 2));
+
+    console.log("Received form submission:", JSON.stringify(body, null, 2));
+
+    // Always generate a fresh access token
     const accessToken = await getAccessToken();
+
     const zohoData = {
+      // ── Section 1: Contact Info ──────────────────────────────────────────
       Full_Name: `${body.FirstName || ""} ${body.LastName || ""}`.trim(),
       First_Name: body.FirstName || "",
       Last_Name: body.LastName || "",
       Mobile_Number: body.Phone || "",
       Email: body.Email || "",
+
+      // ── Section 2: Address ───────────────────────────────────────────────
       Street_Address: body.Street || "",
       City: body.City || "",
       State: body.State || "",
       Pincode: body.Pincode || "",
+
+      // ── Section 3: Service Info ──────────────────────────────────────────
       Service_Type: body.ServiceType || "",
       Service_Label: body.ServiceLabel || "",
       Service_Format: body.ServiceFormat || "",
+
+      // ── Section 4: House Help ────────────────────────────────────────────
       Tasks_Needed: arrToStr(body.Tasks),
       House_Size: body.HouseSize || "",
       People_At_Home: body.PeopleAtHome || "",
       Pets_At_Home: body.PetsAtHome || "",
+
+      // ── Section 5: Cook ──────────────────────────────────────────────────
       Meal_Preferences: body.MealPref || "",
       Meals_Needed: arrToStr(body.MealsNeeded),
       Cuisine_Preference: arrToStr(body.CuisinePref),
+
+      // ── Section 6: Babysitter ────────────────────────────────────────────
       Child_Age: body.ChildAge || "",
       Child_Duties: arrToStr(body.ChildDuties),
+
+      // ── Section 7: Elderly Care ──────────────────────────────────────────
       Patient_Age: body.PatientAge || "",
       Patient_Gender: body.PatientGender || "",
       Care_Needed: arrToStr(body.CareNeeded),
+
+      // ── Section 8: Driver ────────────────────────────────────────────────
       Vehicle_Type: arrToStr(body.VehicleType),
       Experience_Required: body.ExperienceRequired || "",
+
+      // ── Section 9: House Manager ─────────────────────────────────────────
       Manager_Duties: arrToStr(body.ManagerDuties),
       Home_Type: body.HomeType || "",
+
+      // ── Section 10: Multiple Services ────────────────────────────────────
       Multi_Services: arrToStr(body.MultiServices),
+
+      // ── Section 11: Budget & Urgency ─────────────────────────────────────
       Monthly_Budget: body.Budget || "",
       Urgency: body.Urgency || "",
+
+      // ── Section 12: Plan & Payment ───────────────────────────────────────
       Plan_Type: body.PlanType || "",
       Payment_Status: body.PaymentStatus || "",
+
+      // ── Section 13: Notes ────────────────────────────────────────────────
       Special_Instructions: body.Instructions || "",
       Payment_Screenshot: body.ScreenshotUrl || "",
     };
+
+    console.log("Sending to Zoho:", JSON.stringify(zohoData, null, 2));
+
     const response = await axios.post(
       "https://creator.zoho.in/api/v2/support_domesticpro/helpermatch-system/form/HouseholdRequests",
       { data: zohoData },
@@ -95,18 +139,16 @@ app.post("/submit", async (req, res) => {
         },
       },
     );
-    console.log(
-      "Zoho Response (Demand):",
-      JSON.stringify(response.data, null, 2),
-    );
-    res
-      .status(200)
-      .json({ message: "Submitted successfully", data: response.data });
+
+    console.log("Zoho Response:", JSON.stringify(response.data, null, 2));
+
+    res.status(200).json({
+      message: "Submitted successfully",
+      data: response.data,
+    });
   } catch (error) {
-    console.error(
-      "Zoho Error (Demand):",
-      error.response?.data || error.message,
-    );
+    console.error("Zoho Error:", error.response?.data || error.message);
+
     res.status(500).json({
       message: "Zoho API failed",
       error: error.response?.data || error.message,
@@ -114,27 +156,53 @@ app.post("/submit", async (req, res) => {
   }
 });
 
+/* ============================================================
+   JOTFORM ROUTE — DomesticPro Supplier Onboarding Form
+   JotForm Webhook URL: https://yourdomain.com/submit-jotform
+   Form: https://form.jotform.com/253542636960058
+   ============================================================
+
+   JotForm field key format: q{number}_{camelCaseName}
+   Log raw body first to confirm exact keys from your form.
+
+   FIELDS FROM YOUR FORM:
+   ┌─────────────────────────────────────────────────────────┐
+   │ Page 1                                                  │
+   │  • Name (First + Last)                                  │
+   │  • Phone Number                                         │
+   │  • Gender                                               │
+   │  • Age                                                  │
+   │  • Marital Status                                       │
+   │  • Current City                                         │
+   │  • Native City                                          │
+   │  • Language Spoken                                      │
+   │  • Service Applying For                                 │
+   │  • Salary Expectation                                   │
+   │  • Years of Experience                                  │
+   │  • Age Groups Handled   (Nanny-specific)                │
+   │  • Cuisine Expertise    (Cook-specific)                 │
+   │  • Category (Veg/Non-Veg) (Cook-specific)               │
+   │  • Vehicle Experience   (Driver-specific)               │
+   │  • Driving License      (Driver-specific)               │
+   │  • Work Comfortable With (House Help-specific)          │
+   │  • Aadhaar Card (file upload)                           │
+   │  • Photograph (file upload)                             │
+   │                                                         │
+   │ Page 2 — Interview Assessment                           │
+   │  • Understands Instructions                             │
+   │  • Overall Attitude                                     │
+   │  • Punctuality & Responsiveness                         │
+   │  • Personal Hygiene & Neatness                          │
+   │                                                         │
+   │ Page 3                                                  │
+   │  • Domestic Pro Verified                                │
+   └─────────────────────────────────────────────────────────┘
+*/
 app.post("/submit-jotform", async (req, res) => {
   try {
     const body = req.body;
-    console.log("JotForm webhook received:", JSON.stringify(body, null, 2));
-
-    let raw = {};
-    if (body.rawRequest) {
-      try {
-        raw =
-          typeof body.rawRequest === "string"
-            ? JSON.parse(body.rawRequest)
-            : body.rawRequest;
-      } catch (e) {
-        console.error("Failed to parse rawRequest:", e.message);
-        raw = body;
-      }
-    } else {
-      raw = body;
-    }
-
-    console.log("Parsed JotForm fields:", JSON.stringify(raw, null, 2));
+    // ── RAW LOG — Check this on first test to confirm field keys ──────────
+    console.log("JotForm RAW body:", JSON.stringify(body, null, 2));
     const accessToken = await getAccessToken();
 
     const zohoData = {
@@ -207,8 +275,10 @@ app.post("/submit-jotform", async (req, res) => {
       Form_Title: body.formTitle || "",
     };
 
-    console.log("Sending to Zoho (Supply):", JSON.stringify(zohoData, null, 2));
+    console.log("Sending to Zoho:", JSON.stringify(zohoData, null, 2));
 
+    // ⚠️ IMPORTANT: Change the form name below to your Zoho Creator
+    //    supplier form name (e.g. SupplierOnboarding) if it's different
     const response = await axios.post(
       "https://creator.zoho.in/appbuilder/support_domesticpro/helpermatch-system/form/Helpers1",
       { data: zohoData },
@@ -220,19 +290,15 @@ app.post("/submit-jotform", async (req, res) => {
       },
     );
 
-    console.log(
-      "Zoho Response (Supply):",
-      JSON.stringify(response.data, null, 2),
-    );
+    console.log("Zoho Response:", JSON.stringify(response.data, null, 2));
+
     res.status(200).json({
       message: "JotForm supplier submitted successfully",
       data: response.data,
     });
   } catch (error) {
-    console.error(
-      "Zoho Error (Supply):",
-      error.response?.data || error.message,
-    );
+    console.error("Zoho Error:", error.response?.data || error.message);
+
     res.status(500).json({
       message: "Zoho API failed",
       error: error.response?.data || error.message,
