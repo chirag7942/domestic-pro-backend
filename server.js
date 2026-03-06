@@ -117,24 +117,23 @@ app.post("/submit", async (req, res) => {
 app.post("/submit-jotform", async (req, res) => {
   try {
     const body = req.body;
-    console.log("JotForm webhook received:", JSON.stringify(body, null, 2));
+
+    console.log("Webhook body:", JSON.stringify(body, null, 2));
 
     let raw = {};
-    if (body.rawRequest) {
-      try {
-        raw =
-          typeof body.rawRequest === "string"
-            ? JSON.parse(body.rawRequest)
-            : body.rawRequest;
-      } catch (e) {
-        console.error("Failed to parse rawRequest:", e.message);
-        raw = body;
-      }
+
+    if (body.$return_value?.rawRequest) {
+      raw = body.$return_value.rawRequest;
+    } else if (body.rawRequest) {
+      raw =
+        typeof body.rawRequest === "string"
+          ? JSON.parse(body.rawRequest)
+          : body.rawRequest;
     } else {
       raw = body;
     }
 
-    console.log("Parsed JotForm fields:", JSON.stringify(raw, null, 2));
+    console.log("Parsed JotForm data:", JSON.stringify(raw, null, 2));
     const accessToken = await getAccessToken();
     const zohoData = {
       // COMMON
