@@ -285,7 +285,7 @@ app.post("/submit-jotform", async (req, res) => {
     // ⚠️ IMPORTANT: Change the form name below to your Zoho Creator
     //    supplier form name (e.g. SupplierOnboarding) if it's different
     const response = await axios.post(
-      "https://creator.zoho.in/appbuilder/support_domesticpro/helpermatch-system/form/Helpers1",
+      "https://creator.zoho.in/api/v2/support_domesticpro/helpermatch-system/form/Helpers1",
       { data: zohoData },
       {
         headers: {
