@@ -2,6 +2,7 @@ const express = require("express");
 const axios = require("axios");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const multer = require("multer");
 
 dotenv.config();
 
@@ -13,6 +14,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const upload = multer();
 app.get("/", (req, res) => {
   res.send("Hello World");
 });
@@ -117,7 +119,7 @@ app.post("/submit", async (req, res) => {
   }
 });
 
-app.post("/submit-jotform", async (req, res) => {
+app.post("/submit-jotform", upload.any(), async (req, res) => {
   try {
     console.log("Headers:", req.headers);
     console.log("Body:", req.body);
