@@ -201,11 +201,15 @@ app.post("/submit", async (req, res) => {
 app.post("/submit-jotform", async (req, res) => {
   try {
     const body = req.body;
-    const raw = body.rawRequest || body;
-    // ── RAW LOG — Check this on first test to confirm field keys ──────────
-    console.log("JotForm RAW body:", JSON.stringify(body, null, 2));
-    const accessToken = await getAccessToken();
 
+    const raw =
+      typeof body.rawRequest === "string"
+        ? JSON.parse(body.rawRequest)
+        : body.rawRequest || body;
+
+    console.log("Parsed JotForm Data:", raw);
+
+    const accessToken = await getAccessToken();
     const zohoData = {
       // COMMON
       Full_Name:
