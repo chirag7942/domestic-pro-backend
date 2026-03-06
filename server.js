@@ -8,7 +8,10 @@ dotenv.config();
 const app = express();
 
 app.use(cors());
+
+// IMPORTANT for Jotform webhooks
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.get("/", (req, res) => {
   res.send("Hello World");
@@ -116,21 +119,23 @@ app.post("/submit", async (req, res) => {
 
 app.post("/submit-jotform", async (req, res) => {
   try {
+    console.log("Headers:", req.headers);
+    console.log("Body:", req.body);
     const body = req.body;
 
     console.log("Webhook body:", JSON.stringify(body, null, 2));
 
     let raw = {};
 
-    if (body.$return_value?.rawRequest) {
+    if (body && body.$return_value && body.$return_value.rawRequest) {
       raw = body.$return_value.rawRequest;
-    } else if (body.rawRequest) {
+    } else if (body && body.rawRequest) {
       raw =
         typeof body.rawRequest === "string"
           ? JSON.parse(body.rawRequest)
           : body.rawRequest;
     } else {
-      raw = body;
+      raw = body || {};
     }
 
     console.log("Parsed JotForm data:", JSON.stringify(raw, null, 2));
