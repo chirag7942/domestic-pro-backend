@@ -201,6 +201,7 @@ app.post("/submit", async (req, res) => {
 app.post("/submit-jotform", async (req, res) => {
   try {
     const body = req.body;
+    const raw = body.rawRequest || body;
     // ── RAW LOG — Check this on first test to confirm field keys ──────────
     console.log("JotForm RAW body:", JSON.stringify(body, null, 2));
     const accessToken = await getAccessToken();
