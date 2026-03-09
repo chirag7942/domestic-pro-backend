@@ -3,6 +3,8 @@ const axios = require("axios");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const multer = require("multer");
+const puppeteer = require("puppeteer-core");
+const chromium = require("@sparticuz/chromium");
 
 dotenv.config();
 
@@ -243,6 +245,139 @@ app.post("/submit-jotform", upload.any(), async (req, res) => {
       error: error.response?.data || error.message,
     });
   }
+});
+
+// ══════════════════════════════════════════════════════
+// PDF GENERATION
+// ══════════════════════════════════════════════════════
+
+let pdfBusy = false;
+let lastPdfBuffer = null; // ← stores the most recently generated PDF
+let lastPdfFilename = "last.pdf";
+
+app.post("/generate-pdf", async (req, res) => {
+  if (pdfBusy) {
+    return res.status(429).json({
+      message: "PDF render in progress, retry in 10 seconds",
+    });
+  }
+
+  pdfBusy = true;
+  let browser = null;
+
+  try {
+    const { html, filename } = req.body;
+
+    if (!html) {
+      pdfBusy = false;
+      return res.status(400).json({ message: "HTML content is required" });
+    }
+
+    console.log(`PDF started — ${filename}`);
+    console.log(`HTML size: ${(html.length / 1024).toFixed(1)} KB`);
+
+    browser = await puppeteer.launch({
+      args: [
+        ...chromium.args,
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--single-process",
+        "--no-zygote",
+      ],
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
+
+    const page = await browser.newPage();
+
+    await page.setContent(html, {
+      waitUntil: "networkidle0",
+      timeout: 60000,
+    });
+
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      margin: { top: "8mm", right: "8mm", bottom: "8mm", left: "8mm" },
+      printBackground: true,
+    });
+
+    await browser.close();
+    browser = null;
+    pdfBusy = false;
+
+    console.log(`PDF done — ${(pdfBuffer.length / 1024).toFixed(1)} KB`);
+
+    // ── Save for /last-pdf preview ──
+    lastPdfBuffer = pdfBuffer;
+    lastPdfFilename = filename || "document.pdf";
+    console.log(`PDF saved to /last-pdf for preview`);
+
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename || "document.pdf"}"`,
+      "Content-Length": pdfBuffer.length,
+    });
+
+    res.send(pdfBuffer);
+  } catch (error) {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {}
+    }
+    pdfBusy = false;
+    console.error("PDF Error:", error.message);
+    res.status(500).json({
+      message: "PDF generation failed",
+      error: error.message,
+    });
+  }
+});
+
+// ══════════════════════════════════════════════════════
+// LAST PDF PREVIEW — open in browser to see latest PDF
+// ══════════════════════════════════════════════════════
+app.get("/last-pdf", (req, res) => {
+  if (!lastPdfBuffer) {
+    return res.status(404).send(`
+      <html><body style="font-family:Arial;padding:40px;text-align:center;">
+        <h2>No PDF generated yet</h2>
+        <p>Trigger your Zoho workflow first, then open this URL again.</p>
+      </body></html>
+    `);
+  }
+
+  console.log(`/last-pdf viewed — serving: ${lastPdfFilename}`);
+
+  res.set({
+    "Content-Type": "application/pdf",
+    "Content-Disposition": `inline; filename="${lastPdfFilename}"`,
+    "Content-Length": lastPdfBuffer.length,
+  });
+
+  res.send(lastPdfBuffer);
+});
+
+// ══════════════════════════════════════════════════════
+// LOGGING ENDPOINT — receives logs from Zoho Deluge
+// ══════════════════════════════════════════════════════
+app.post("/log", (req, res) => {
+  const { level = "INFO", message, data } = req.body;
+  const timestamp = new Date().toISOString();
+
+  if (data) {
+    console.log(
+      `[${timestamp}] [ZOHO-${level}] ${message}`,
+      JSON.stringify(data, null, 2),
+    );
+  } else {
+    console.log(`[${timestamp}] [ZOHO-${level}] ${message}`);
+  }
+
+  res.status(200).json({ ok: true });
 });
 
 app.listen(5000, () => console.log("Backend running on port 5000"));
