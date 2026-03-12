@@ -121,6 +121,111 @@ app.post("/submit", async (req, res) => {
   }
 });
 
+// JOTFORM DEMAND WEBHOOK — paste this into server.js
+// Receives JotForm webhook → maps fields → sends to Zoho
+
+app.post("/submit-jotform-demand", upload.any(), async (req, res) => {
+  try {
+    const body = req.body;
+    console.log(
+      "JotForm Demand webhook received:",
+      JSON.stringify(body, null, 2),
+    );
+
+    // Parse rawRequest (JotForm sends data nested here)
+    let raw = {};
+    if (body?.rawRequest) {
+      raw =
+        typeof body.rawRequest === "string"
+          ? JSON.parse(body.rawRequest)
+          : body.rawRequest;
+    } else {
+      raw = body || {};
+    }
+
+    console.log("Parsed JotForm Demand data:", JSON.stringify(raw, null, 2));
+
+    // ── Map JotForm fields to your existing Zoho schema ──────────────────────
+    // UPDATE the q-numbers below to match your actual JotForm demand form fields
+    // (Open your JotForm form → right-click any field → "Inspect" to find q-numbers)
+    const zohoData = {
+      Full_Name:
+        `${raw.q5_name?.first || ""} ${raw.q5_name?.last || ""}`.trim(),
+      Mobile_Number:
+        raw.q6_phoneNumber?.full || raw.q4_phoneNumber?.phone || "",
+      Email: raw.q64_email || "",
+      Street_Address: raw.q65_address?.addr_line1 || "",
+      City: raw.q65_address?.city || raw.q65_city || "",
+      State: raw.q65_address?.state || raw.q65_state || "",
+      Pincode: raw.q65_address?.postal || raw.q65_pincode || "",
+      Service_Type: raw.q59_serviceType || "",
+      Service_Label: raw.q9_serviceLabel || "",
+      Service_Format: raw.q60_serviceFormat || "",
+      Tasks_Needed: arrToStr(raw.q23_tasks),
+      House_Size: raw.q66_houseSize || "",
+      People_At_Home: raw.q67_peopleAtHome || "",
+      Pets_At_Home: raw.q62_petsAtHome || "",
+      Meal_Preferences: raw.q20_mealPref || "",
+      // Meals_Needed: arrToStr(raw.q16_mealsNeeded),
+      Cuisine_Preference: arrToStr(raw.q19_cuisinePref),
+      Child_Age: raw.q72_childsAge || "",
+      Child_Duties: arrToStr(raw.q45_childDuties),
+      Patient_Age: raw.q73_patientAge || "",
+      Patient_Gender: raw.q53_patientGender || "",
+      Care_Needed: arrToStr(raw.q54_careNeeded),
+      Vehicle_Type: arrToStr(raw.q21_vehicleType),
+      Manager_Duties: arrToStr(raw.q55_managerDuties),
+      Home_Type: raw.q57_homeType || "",
+      Multi_Services: arrToStr(raw.q15_multiServices),
+      Monthly_Budget: raw.q68_budget || "",
+      Urgency: raw.q61_urgency || "",
+      Special_Instructions: raw.q70_instructions || "",
+
+      // JotForm-only fields (no payment in JotForm demand form)
+      Plan_Type: "jotform_submission",
+      Payment_Status: "Not Applicable",
+      Payment_Screenshot: "",
+    };
+
+    console.log(
+      "Sending to Zoho (JotForm Demand):",
+      JSON.stringify(zohoData, null, 2),
+    );
+
+    const accessToken = await getAccessToken();
+
+    const response = await axios.post(
+      "https://creator.zoho.in/api/v2/support_domesticpro/helpermatch-system/form/HouseholdRequests",
+      { data: zohoData },
+      {
+        headers: {
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    console.log(
+      "Zoho Response (JotForm Demand):",
+      JSON.stringify(response.data, null, 2),
+    );
+
+    res.status(200).json({
+      message: "JotForm demand submitted successfully",
+      data: response.data,
+    });
+  } catch (error) {
+    console.error(
+      "Zoho Error (JotForm Demand):",
+      error.response?.data || error.message,
+    );
+    res.status(500).json({
+      message: "Zoho API failed",
+      error: error.response?.data || error.message,
+    });
+  }
+});
+
 app.post("/submit-jotform", upload.any(), async (req, res) => {
   try {
     console.log("Body:", req.body);
@@ -247,9 +352,7 @@ app.post("/submit-jotform", upload.any(), async (req, res) => {
   }
 });
 
-// ══════════════════════════════════════════════════════
 // PDF GENERATION
-// ══════════════════════════════════════════════════════
 
 let pdfBusy = false;
 let lastPdfBuffer = null; // ← stores the most recently generated PDF
@@ -337,9 +440,7 @@ app.post("/generate-pdf", async (req, res) => {
   }
 });
 
-// ══════════════════════════════════════════════════════
 // LAST PDF PREVIEW — open in browser to see latest PDF
-// ══════════════════════════════════════════════════════
 app.get("/last-pdf", (req, res) => {
   if (!lastPdfBuffer) {
     return res.status(404).send(`
@@ -361,9 +462,7 @@ app.get("/last-pdf", (req, res) => {
   res.send(lastPdfBuffer);
 });
 
-// ══════════════════════════════════════════════════════
 // LOGGING ENDPOINT — receives logs from Zoho Deluge
-// ══════════════════════════════════════════════════════
 app.post("/log", (req, res) => {
   const { level = "INFO", message, data } = req.body;
   const timestamp = new Date().toISOString();
