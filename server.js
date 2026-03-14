@@ -257,7 +257,9 @@ app.post("/submit-jotform", upload.any(), async (req, res) => {
       Gender1: raw.q8_typeA || "",
       Age: raw.q9_number || "",
       Marital_Status: raw.q10_typeA10 || "", // "Yes" or "No"
-      Current_City: raw.q11_typeA11 || "",
+      Street_Address: raw.q64_currentAddress?.addr_line1 || "",
+      Current_City: raw.q64_currentAddress?.city || raw.q65_city || "",
+      State: raw.q64_currentAddress?.state || raw.q65_state || "",
       City: raw.q40_preferredWork || "", // e.g. "Gurgaon, Delhi, Noida"
       Native_City: raw.q12_nativeCity || "",
       // ── Job Details ───────────────────────────────────────────────────────
